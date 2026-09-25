@@ -1,0 +1,105 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[margin=2cm]{geometry}
+\usepackage{amsmath,amssymb}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt}
+\begin{document}
+\begin{center}
+{\LARGE\textbf{Cahier de Physique I}}\\
+\large Applications physiques du crible congruentiel : vide adélique,\\
+renormalisation dyadique, chaos quantique, matière condensée\\
+Fouad Bensmail --- 25 septembre 2026
+\end{center}
+
+Ce cahier est le frère physique du cahier mathématique \emph{Addendum v4 à la
+Note Universelle VII} (47 addenda, Zenodo v39, DOI 10.5281/zenodo.22950183).
+Il en applique les mesures --- volumes locaux, nombres de Tamagawa, résidus
+spectraux, grammaire dyadique --- aux quatre portes physiques ordonnées par
+degré de résonance : mécanique quantique adélique et cordes $p$-adiques
+(rang I) ; groupe de renormalisation, verres de spin et réseaux de tenseurs
+(rang II) ; chaos quantique et systèmes ouverts (rang III) ; matière
+condensée et transitions de phase (rang IV). Même méthode que la maison :
+toute affirmation est une mesure avec garde ; tout refus est publié.
+
+\section*{Addendum I-Phys --- adelic\_amplitude : le vide adélique, point fixe infrarouge et séparation géométrie/matière}
+
+Le compagnon \texttt{adelic\_amplitude.py} (premier du Cahier Physique) teste
+l'hypothèse de Freund--Witten (1987) : les amplitudes de cordes $p$-adiques
+s'adélisent en une constante universelle. Notre ``joyau'' (Addendum XIII :
+$\prod_p \beta_p(\text{jumeaux}) = 2C_2$) est-il cette constante de
+couplage ?
+
+\textbf{Refus publié (v0).} Le protocole initial construisait l'amplitude
+$p$-adique naïve $A_p(s) = \beta_p(H)\,p^{-s}$ et cherchait ses pôles :
+objet mal défini --- le facteur $\prod_p p^{-s} = e^{-s\,\theta(P)}$
+s'effondre vers $0$ pour tout $\mathrm{Re}\,s > 0$ ; renormalisé de cette
+divergence triviale de volume, toute dépendance en $s$ disparaît. La v1 ne
+mesure donc que trois objets exacts : le produit eulérien (le vide), sa
+queue (le flot RG), son résidu spectral (la séparation géométrie/matière).
+
+\textbf{Protocole.} Pour six motifs admissibles $H$, on calcule les volumes
+locaux $\beta_p(H)$ pour $p \le 10^7$, le produit partiel $S_P(H)$, et la
+queue eulérien $S(H) - S_P(H) \approx C_H/(P \ln P)$. Trois objets sont
+mesurés : (1) le point fixe infrarouge $S(H)$ ; (2) le flot de
+renormalisation de la couplance adélique ; (3) le spectre FFT du résidu
+eulérien sur $t \in [10, 50]$, en variable $\ln P$ (résolution
+$\Delta t = 2\pi/\ln(10^3) \approx 0{,}91$, doctrine de l'Addendum XXXVII).
+
+\textbf{Gardes pré-enregistrées.}
+\begin{itemize}
+\item G0 (couplage) : $|S_{10^6}(\text{jumeaux}) - 1{,}3203236| < 10^{-6}$ --- tenue.
+\item G1 (flot RG) : variation relative de $C_H(P) = (S_{\text{ancre}} - S_P)\,P\ln P$ sur $[10^4, 10^6] < 15\,\%$ pour chacun des six motifs --- tenue ($-7{,}0\,\%$ partout).
+\item G3 (fonction bêta) : pente de $\ln|S_{\text{ancre}} - S_P| + \ln\ln P$ contre $\ln P$ dans $[-1{,}15 ; -0{,}85]$ --- tenue ($-1{,}007$ partout).
+\item G2 (séparation) : aucun pic FFT du résidu eulérien $> 3\times$ la médiane sur $t \in [10, 50]$ $\to$ vide spectralement silencieux (prédit) ; un pic à $< 0{,}45$ d'un zéro de $\zeta$ $\to$ STRUCTURE (ouverture) --- tenue ($1{,}00$ partout).
+\end{itemize}
+
+\textbf{Mesure.} Temps total : $1{,}47$ s.
+
+\begin{center}
+\begin{tabular}{lcccc}
+\hline
+Motif & $S_{10^6}$ & $C_H$ & var (\%) & pente \\
+\hline
+jumeaux    & 1{,}3203237 & $-1{,}2046$  & $-7{,}0$ & $-1{,}007$ \\
+cousins    & 1{,}3203237 & $-1{,}2046$  & $-7{,}0$ & $-1{,}007$ \\
+sexy       & 2{,}6406474 & $-2{,}4092$  & $-7{,}0$ & $-1{,}007$ \\
+triplet\_A & 2{,}8582492 & $-7{,}8234$  & $-7{,}0$ & $-1{,}007$ \\
+triplet\_B & 2{,}8582492 & $-7{,}8234$  & $-7{,}0$ & $-1{,}007$ \\
+quadruplet & 4{,}1511826 & $-22{,}7249$ & $-7{,}0$ & $-1{,}007$ \\
+\hline
+\end{tabular}
+\end{center}
+
+Spectre FFT du résidu eulérien (jumeaux) aux neuf zéros de $\zeta$ :
+amplitude $0{,}314$ à $t = 14{,}13$ et $0{,}637$ aux huit autres --- toutes
+au plancher de bruit ($\max/\text{médiane} = 1{,}00$ sur les six motifs).
+
+\textbf{Verdict.} \texttt{AUDIT VERT}. Gardes G0, G1, G2, G3 tenues.
+
+\textbf{Lecture.} La séparation géométrie/matière est mesurée :
+\begin{enumerate}
+\item Le vide eulérien (produit pur des $\beta_p$) est un point fixe
+stationnaire, spectralement silencieux : il ne porte pas les résonances de
+$\zeta$ détectées dans le résidu du crible (Addenda XXXVI--XLVII). En langue
+physique : le fond géométrique ne porte pas les fluctuations quantiques du
+spectre arithmétique.
+\item Le flot RG de la queue eulérienne est exactement en $1/(P \ln P)$
+(pente $-1{,}007$), comme prédit par le Théorème T3 : la fonction bêta du
+vide adélique est mesurée.
+\item Le nombre de Tamagawa $2C_2$ est la constante de couplage infrarouge
+du vide, confirmée à $10^{-7}$ près pour les jumeaux : le ``joyau'' de
+l'Addendum XIII reçoit sa lecture physique de point fixe.
+\end{enumerate}
+
+\textbf{Statut.} Porte 2 (mécanique quantique adélique) ouverte par une
+première pierre verte : le vide adélique est spectralement silencieux, et
+les résonances $\zeta$ vivent dans le secteur matière (résidu du crible),
+non dans le secteur géométrie (queue eulérienne). La frontière entre le
+fond géométrique et les excitations qui y vivent est mesurée, non postulée.
+Prochaine pierre (rang II) : \texttt{dyadic\_renormalization.py}, le flot
+de renormalisation sur l'arbre 2-adique (verres de spin, réseaux de
+tenseurs).
+
+\end{document}
