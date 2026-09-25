@@ -132,5 +132,34 @@ Le compagnon \texttt{dyadic\_renormalization.py} teste l'analogie entre la gramm
 \textbf{Lecture physique.} L'enchevêtrement dyadique (ordre croissant avec l'échelle) et la saturation (point fixe infra-rouge) sont massivement confirmés. La métrique de régularité est valide, mais sa robustesse nécessite des fenêtres d'observation au-delà du seuil de bruit statistique des petits échantillons.
 
 \textbf{Statut.} Porte 2 (Rang II) consolidée. Le phénomène de renormalisation 2-adique est mesuré ; la limite de la métrique est cartographiée et publiée.
+\vspace{1cm}
+\hrule
+\vspace{1cm}
+
+\section*{Note Méthodologique --- Consolidation du Théorème T3 par haute précision}
+
+\textbf{Contexte.} Lors de la mesure initiale de la queue eulérienne (Addendum I-Phys, G1 et G3), une anomalie numérique a été détectée : pour les motifs de taille $k \ge 3$, l'exposant effectif $\alpha_{\text{eff}}$ de la décroissance de l'erreur $\Theta_P - \Theta_\infty$ semblait diverger à $P = 10^6$, passant de $\sim 1.09$ à $\sim 2.4$.
+
+\textbf{Diagnostic.} L'anomalie n'était pas physique mais instrumentale : les constantes d'ancre $\Theta_\infty$ étaient codées avec seulement 7 décimales, créant un plancher de bruit de $\sim 5 \times 10^{-8}$. Lorsque l'erreur réelle devenait plus petite que ce plancher (à $P = 10^6$ pour $k \ge 3$), le calcul de $\alpha_{\text{eff}}$ était dominé par l'erreur d'arrondi.
+
+\textbf{Correction.} Le script \texttt{alpha\_convergence\_mp.py} a été réécrit en utilisant la bibliothèque \texttt{mpmath} avec 50 décimales de précision, et les ancres ont été recalculées à $P = 10^7$. L'anomalie a disparu : $\alpha_{\text{eff}}$ converge uniformément vers $1 + 1/\ln P$ pour tous les motifs, confirmant la décroissance en $1/(P \ln P)$ prédite par T3.
+
+\textbf{Pépite consolidante.} L'analyse des constantes de queue $C(k)$ révèle une loi exacte :
+\[
+C(k) = \Theta_\infty(k) \cdot \frac{k(k-1)}{2} \cdot \left(1 - \frac{1}{\ln P_{\text{eff}}} + O\!\left(\frac{1}{\ln^2 P}\right)\right)
+\]
+\textbf{Dérivation.} Pour $p > P$ et un motif de taille $k$, $\nu_p = k$, donc :
+\[
+\log \beta_p = \log\!\left(1 - \frac{k}{p}\right) - k \log\!\left(1 - \frac{1}{p}\right) = -\frac{k(k-1)}{2p^2} + O\!\left(\frac{1}{p^3}\right)
+\]
+En sommant sur $p > P$ et en utilisant le résultat de Mertens $\sum_{p > P} 1/p^2 = 1/(P \ln P) \cdot (1 - 1/\ln P + \dots)$, on obtient :
+\[
+\Theta_P - \Theta_\infty \approx -\Theta_\infty \cdot \frac{k(k-1)}{2} \cdot \frac{1}{P \ln P}
+\]
+Le facteur $0.91$ observé empiriquement est exactement $1 - 1/\ln P_{\text{eff}}$ pour $P_{\text{eff}} \approx 10^5$.
+
+\textbf{Positionnement (Article III).} Ce résultat n'est pas un théorème nouveau, mais un raffinement explicite du Théorème T3. Il montre que le coefficient de queue $C(k)$ n'est pas une constante indépendante, mais est dérivable du produit eulérien $\Theta_\infty(k)$ lui-même, à la correction de Mertens près.
+
+\textbf{Verdict.} Le Théorème T3 sort renforcé. La fondation du Rang I est consolidée.
 
 \end{document}
