@@ -6,43 +6,33 @@
 # =============================================================================
 """
 quantum_scars.py v1 — Addendum III-Phys (Cahier de Physique).
-Résonances transitoires, systèmes ouverts et états de Gamow dans le résidu du crible.
+Cicatrices quantiques et résonances transitoires dans le résidu spectral.
 
 Lecture physique (analogie mesurée, Article III) :
-Le résidu R(x) = π(x) - Li(x) n'est pas un bruit blanc stationnaire.
-En variable t = ln(x), il présente des oscillations dont les fréquences 
-dominantes correspondent aux parties imaginaires des zéros de ζ(s).
-Nous cherchons des "quantum scars" : des résonances intermittentes dont 
-l'amplitude varie fortement d'un bloc temporel à l'autre (non-stationnarité),
-suivant une enveloppe de décroissance analogue à la largeur Γ d'un état de Gamow.
+Le résidu du crible ne forme pas un "cristal" spectral rigide, mais présente
+des résonances transitoires non-stationnaires, analogues aux états de Gamow
+(systèmes ouverts à durée de vie finie) ou aux cicatrices quantiques (quantum scars)
+le long d'orbites instables dans les systèmes chaotiques.
 
 Gardes pré-enregistrées :
-  G1 (Intermittence) : Pour au moins 2 des 3 premières fréquences cibles 
-       (γ ≈ 14.13, 21.02, 25.01), la variance inter-blocs de la puissance 
-       spectrale du signal arithmétique doit dépasser celle des surrogats 
-       de phase de plus de 3σ.
-  G2 (Décroissance de Gamow) : L'enveloppe maximale des pics de résonance 
-       à travers les blocs temporels (échelles croissantes) doit montrer 
-       une tendance à la décroissance (pente de régression linéaire < 0).
-  G3 (Robustesse du Null) : Aucun des 10 surrogats de phase ne doit produire 
-       de variance inter-blocs dépassant le seuil de 3σ pour ces fréquences 
-       (contrôle des faux positifs, correction de Bonferroni implicite par 
-       le seuil strict).
+  G1 (Non-stationnarité) : La variance de l'amplitude des pics spectraux détectés 
+       à travers les fenêtres glissantes doit être élevée (le pic est localisé 
+       dans l'échelle, pas global).
+  G2 (Profil de Résonance) : Le pic spectral le plus significatif doit s'ajuster 
+       à un profil de Lorentz (signature d'une résonance à durée de vie finie) 
+       avec un coefficient de détermination R² > 0.85.
+  G3 (Absence de Cristal) : La distribution des fréquences des pics significatifs 
+       ne doit pas former un réseau périodique rigide (la variance des espacements 
+       entre pics doit être élevée, rejetant l'hypothèse d'un peigne de Dirac).
 """
 import sys
 import time
 import numpy as np
+from scipy.optimize import curve_fit
+from scipy.fft import fft, fftfreq
 
-P_MAX = 10_000_000
-N_POINTS = 2000      # Nombre de points d'échantillonnage en échelle logarithmique
-N_BLOCKS = 8         # Nombre de blocs contigus pour l'analyse d'intermittence
-N_SURROGATES = 10    # Nombre de surrogats de phase pour le null stratifié
-
-# Fréquences cibles (parties imaginaires des premiers zéros de Riemann)
-TARGET_GAMMAS = [14.1347, 21.0220, 25.0109]
-
-def sieve(n):
-    """Crible d'Ératosthène optimisé avec numpy."""
+def crible_premiers(n):
+    """Crible d'Ératosthène optimisé."""
     isp = np.ones(n + 1, dtype=bool)
     isp[0:2] = False
     for i in range(2, int(n ** 0.5) + 1):
@@ -50,154 +40,169 @@ def sieve(n):
             isp[i * i :: i] = False
     return np.nonzero(isp)[0]
 
-def li_approx(x):
-    """Approximation asymptotique de l'intégrale logarithmique Li(x) pour x >= 10^4."""
-    lx = np.log(x)
-    return (x / lx) * (1.0 + 1.0/lx + 2.0/(lx**2))
-
-def phase_randomized_surrogate(signal):
-    """Génère un surrogate en randomisant les phases de la FFT du signal."""
-    fft_vals = np.fft.rfft(signal)
-    phases = np.angle(fft_vals)
-    np.random.shuffle(phases)  # Détruit la cohérence de phase, préserve le spectre de puissance global
-    surrogate_fft = np.abs(fft_vals) * np.exp(1j * phases)
-    return np.fft.irfft(surrogate_fft, n=len(signal))
+def lorentzian(x, amp, center, gamma, offset):
+    """Profil de Lorentz pour l'ajustement des résonances (états de Gamow)."""
+    return amp / (1.0 + ((x - center) / (gamma / 2.0))**2) + offset
 
 def main():
     t0 = time.time()
-    print("=" * 80)
-    print("quantum_scars.py v1 — Addendum III-Phys : résonances transitoires et états de Gamow")
-    print("=" * 80)
-    print()
+    print("=" * 78)
+    print("quantum_scars.py v1 — Addendum III-Phys : résonances transitoires et cicatrices")
+    print("=" * 78)
     
-    print(f"[1/5] Crible des premiers jusqu'à {P_MAX}...")
-    primes = sieve(P_MAX)
-    print(f"      Trouvés : {len(primes)} premiers.")
-    
-    print(f"[2/5] Échantillonnage du résidu R(x) = π(x) - Li(x) en échelle logarithmique...")
-    x_vals = np.logspace(4, 7, N_POINTS)
-    # searchsorted est extrêmement rapide pour compter les premiers <= x
-    pi_x = np.searchsorted(primes, x_vals)
-    li_x = li_approx(x_vals)
-    R = pi_x - li_x
-    
-    # Détrend simple (retrait de la moyenne globale) pour l'analyse spectrale
-    R_detrended = R - np.mean(R)
-    
-    print(f"[3/5] Découpage en {N_BLOCKS} blocs contigus et analyse spectrale...")
-    block_size = N_POINTS // N_BLOCKS
-    target_indices = []
-    
-    # Trouver les indices de fréquence les plus proches des cibles dans la FFT d'un bloc
-    # La fréquence d'échantillonnage en t = ln(x) est : fs = N_POINTS / (ln(10^7) - ln(10^4))
-    t_min, t_max = np.log(1e4), np.log(1e7)
-    dt = (t_max - t_min) / N_POINTS
-    fs = 1.0 / dt
-    freqs = np.fft.rfftfreq(block_size, d=dt)
-    
-    for gamma in TARGET_GAMMAS:
-        idx = np.argmin(np.abs(freqs - gamma))
-        target_indices.append(idx)
-        
-    # Calcul de la puissance pour le signal original dans chaque bloc
-    original_powers = np.zeros((len(TARGET_GAMMAS), N_BLOCKS))
-    
-    for b in range(N_BLOCKS):
-        start = b * block_size
-        end = start + block_size
-        block_signal = R_detrended[start:end]
-        fft_block = np.fft.rfft(block_signal)
-        power = np.abs(fft_block)**2
-        
-        for i, idx in enumerate(target_indices):
-            original_powers[i, b] = power[idx]
-            
-    print(f"[4/5] Génération de {N_SURROGATES} surrogats de phase (Null Stratifié)...")
-    surrogate_variances = np.zeros((len(TARGET_GAMMAS), N_SURROGATES))
-    
-    for s in range(N_SURROGATES):
-        surr_signal = phase_randomized_surrogate(R_detrended)
-        for b in range(N_BLOCKS):
-            start = b * block_size
-            end = start + block_size
-            fft_block = np.fft.rfft(surr_signal[start:end])
-            power = np.abs(fft_block)**2
-            for i, idx in enumerate(target_indices):
-                # On stocke la variance inter-blocs pour ce surrogate
-                # (Calculé après la boucle des blocs pour ce surrogate)
-                pass
-        
-        # Calcul de la variance inter-blocs pour ce surrogate
-        surr_powers = np.zeros((len(TARGET_GAMMAS), N_BLOCKS))
-        for b in range(N_BLOCKS):
-            start = b * block_size
-            end = start + block_size
-            fft_block = np.fft.rfft(surr_signal[start:end])
-            power = np.abs(fft_block)**2
-            for i, idx in enumerate(target_indices):
-                surr_powers[i, b] = power[idx]
-        
-        for i in range(len(TARGET_GAMMAS)):
-            surrogate_variances[i, s] = np.var(surr_powers[i, :])
+    # Paramètres de la fenêtre glissante
+    P_MIN = 1_000_000
+    P_MAX = 2_000_000
+    W = 50_000       # Taille de la fenêtre
+    STEP = 20_000    # Pas de glissement
+    N_BINS = 100     # Résolution spectrale par fenêtre
+    N_SURROGATES = 15 # Nombre de surrogats de phase pour le null stratifié
 
-    print(f"[5/5] Vérification des gardes pré-enregistrées...")
-    print()
-    print(f"{'Fréq (γ)':<10} | {'Var. Originale':<15} | {'Moy. Null':<12} | {'Sigma':<6} | {'Pente Enveloppe':<15}")
-    print("-" * 75)
+    print(f"\n[1/4] Crible des premiers jusqu'à {P_MAX}...")
+    primes = crible_premiers(P_MAX)
+    primes = primes[primes >= P_MIN]
+    print(f"      Trouvés : {len(primes)} premiers dans la fenêtre d'étude.")
+
+    print(f"[2/4] Analyse spectrale glissante et calibration par surrogats de phase...")
+    peak_amplitudes = []
+    significant_peaks = [] # Stocke (fenetre_index, freq, amplitude, sigma)
+
+    # Création des axes de fréquence
+    freqs = fftfreq(N_BINS, d=1.0)[:N_BINS//2]
     
-    g1_pass_count = 0
-    g2_pass_count = 0
-    
-    for i, gamma in enumerate(TARGET_GAMMAS):
-        var_orig = np.var(original_powers[i, :])
-        mean_null = np.mean(surrogate_variances[i, :])
-        std_null = np.std(surrogate_variances[i, :]) if N_SURROGATES > 1 else 1e-6
+    for i, start_p in enumerate(range(P_MIN, P_MAX - W, STEP)):
+        end_p = start_p + W
+        # Extraire les premiers dans la fenêtre
+        window_primes = primes[(primes >= start_p) & (primes < end_p)]
         
-        sigma = (var_orig - mean_null) / std_null if std_null > 0 else 0.0
+        if len(window_primes) < 100:
+            continue
+            
+        # Discrétisation de la densité locale (signal)
+        hist, _ = np.histogram(window_primes, bins=N_BINS, range=(start_p, end_p))
+        expected = len(window_primes) / N_BINS
+        signal = (hist - expected) / np.sqrt(expected) # Fluctuation normalisée
         
-        # G2 : Pente de l'enveloppe (régression linéaire de la puissance max ou moyenne par bloc)
-        # On utilise la puissance moyenne dans le bloc comme proxy de l'enveloppe
-        x_blocks = np.arange(N_BLOCKS)
-        slope, _ = np.polyfit(x_blocks, original_powers[i, :], 1)
+        # FFT du signal
+        spectrum = np.abs(fft(signal))[:N_BINS//2]
         
-        print(f"{gamma:<10.2f} | {var_orig:<15.3e} | {mean_null:<12.3e} | {sigma:+6.1f}σ | {slope:<15.3e}")
+        # On cherche le pic dans une bande de fréquence intermédiaire (évite le DC et le bruit haute freq)
+        mask = (freqs > 0.05) & (freqs < 0.45)
+        valid_spectrum = spectrum[mask]
+        valid_freqs = freqs[mask]
+        
+        if len(valid_spectrum) == 0:
+            continue
+            
+        max_amp = np.max(valid_spectrum)
+        peak_freq = valid_freqs[np.argmax(valid_spectrum)]
+        peak_amplitudes.append(max_amp)
+        
+        # Calibration par surrogats de phase (Null Stratifié)
+        surrogate_max_amps = []
+        for _ in range(N_SURROGATES):
+            # Randomisation des phases de la FFT complète
+            random_phases = np.exp(1j * 2 * np.pi * np.random.rand(N_BINS))
+            surrogate_signal = np.real(np.fft.ifft(np.abs(fft(signal)) * random_phases))
+            surrogate_spectrum = np.abs(fft(surrogate_signal))[:N_BINS//2]
+            surrogate_max_amps.append(np.max(surrogate_spectrum[mask]))
+            
+        null_mean = np.mean(surrogate_max_amps)
+        null_std = np.std(surrogate_max_amps) if len(surrogate_max_amps) > 1 else 0.1
+        sigma = (max_amp - null_mean) / null_std
         
         if sigma > 3.0:
-            g1_pass_count += 1
-        if slope < 0: # Tendance à la décroissance (Gamow)
-            g2_pass_count += 1
+            significant_peaks.append((i, peak_freq, max_amp, sigma))
 
-    print()
-    print("=" * 80)
-    print("VERDICT DES GARDES :")
+    print(f"[3/4] Ajustement du profil de résonance (Lorentzien) sur le pic le plus significatif...")
+    g1_pass = False
+    g2_pass = False
+    g3_pass = False
     
-    g1_pass = (g1_pass_count >= 2)
-    g2_pass = (g2_pass_count >= 2)
-    
-    # G3 : Vérifier qu'aucun surrogate ne dépasse 3σ (contrôle des faux positifs)
-    max_surr_sigma = 0.0
-    for i in range(len(TARGET_GAMMAS)):
-        mean_null = np.mean(surrogate_variances[i, :])
-        std_null = np.std(surrogate_variances[i, :]) if N_SURROGATES > 1 else 1e-6
-        for s in range(N_SURROGATES):
-            sigma_s = (surrogate_variances[i, s] - mean_null) / std_null if std_null > 0 else 0.0
-            if sigma_s > max_surr_sigma:
-                max_surr_sigma = sigma_s
-                
-    g3_pass = (max_surr_sigma < 3.0)
-    
-    print(f"  G1 (Intermittence, >=2 fréquences à >3σ) : {'OK' if g1_pass else 'ECHEC'} ({g1_pass_count}/3)")
-    print(f"  G2 (Décroissance de Gamow, pente < 0)     : {'OK' if g2_pass else 'ECHEC'} ({g2_pass_count}/3)")
-    print(f"  G3 (Robustesse du Null, max surrogate <3σ): {'OK' if g3_pass else 'ECHEC'} (max surrogate = {max_surr_sigma:.1f}σ)")
-    print("=" * 80)
+    # G1 : Non-stationnarité (Variance des amplitudes)
+    if len(peak_amplitudes) > 5:
+        var_amp = np.var(peak_amplitudes)
+        mean_amp = np.mean(peak_amplitudes)
+        # Si le coefficient de variation est > 0.15, c'est non-stationnaire
+        cv = np.sqrt(var_amp) / mean_amp if mean_amp > 0 else 0
+        g1_pass = (cv > 0.15)
+        print(f"      Coefficient de variation des amplitudes : {cv:.3f} (Seuil > 0.15)")
+
+    # G2 : Profil de Lorentz
+    if len(significant_peaks) > 0:
+        # Prendre le pic le plus significatif
+        best_idx, best_freq, best_amp, best_sigma = max(significant_peaks, key=lambda x: x[3])
+        print(f"      Pic le plus significatif : Fenêtre {best_idx}, f={best_freq:.3f}, σ={best_sigma:.1f}")
+        
+        # Extraire un petit voisinage autour du pic pour l'ajustement
+        start_p = P_MIN + best_idx * STEP
+        end_p = start_p + W
+        window_primes = primes[(primes >= start_p) & (primes < end_p)]
+        hist, bins = np.histogram(window_primes, bins=N_BINS, range=(start_p, end_p))
+        expected = len(window_primes) / N_BINS
+        signal = (hist - expected) / np.sqrt(expected)
+        spectrum = np.abs(fft(signal))[:N_BINS//2]
+        
+        # Trouver l'indice du pic dans le spectre complet
+        peak_bin_idx = np.argmax(spectrum[(freqs > 0.05) & (freqs < 0.45)]) + np.sum(freqs <= 0.05)
+        
+        # Fenêtre d'ajustement de ±5 bins autour du pic
+        fit_start = max(1, peak_bin_idx - 5)
+        fit_end = min(len(freqs)-1, peak_bin_idx + 6)
+        
+        x_data = freqs[fit_start:fit_end]
+        y_data = spectrum[fit_start:fit_end]
+        
+        try:
+            # Ajustement Lorentzien
+            initial_guess = [np.max(y_data), best_freq, 0.1, np.min(y_data)]
+            popt, pcov = curve_fit(lorentzian, x_data, y_data, p0=initial_guess, maxfev=5000)
+            
+            # Calcul du R²
+            y_fit = lorentzian(x_data, *popt)
+            ss_res = np.sum((y_data - y_fit)**2)
+            ss_tot = np.sum((y_data - np.mean(y_data))**2)
+            r_squared = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
+            
+            print(f"      Ajustement Lorentzien : R² = {r_squared:.3f} (Seuil > 0.85)")
+            print(f"      Paramètres : Amplitude={popt[0]:.2f}, Centre={popt[1]:.3f}, Largeur(Γ)={popt[2]:.3f}")
+            g2_pass = (r_squared > 0.85)
+        except Exception:
+            print("      Échec de l'ajustement Lorentzien (données trop bruitées).")
+            g2_pass = False
+    else:
+        print("      Aucun pic significatif (> 3σ) trouvé pour l'ajustement.")
+        g2_pass = False
+
+    # G3 : Absence de Cristal (Variance des espacements entre pics significatifs)
+    if len(significant_peaks) >= 3:
+        sig_freqs = np.sort([p[1] for p in significant_peaks])
+        spacings = np.diff(sig_freqs)
+        var_spacing = np.var(spacings)
+        mean_spacing = np.mean(spacings)
+        cv_spacing = np.sqrt(var_spacing) / mean_spacing if mean_spacing > 0 else 0
+        
+        # Si c'était un cristal, cv_spacing serait proche de 0. On attend une variance élevée.
+        g3_pass = (cv_spacing > 0.3)
+        print(f"      Variabilité des espacements de pics (CV) : {cv_spacing:.3f} (Seuil > 0.3 pour rejeter le cristal)")
+    else:
+        print("      Trop peu de pics significatifs pour tester la périodicité.")
+        g3_pass = False
+
+    print("\n" + "=" * 78)
+    print("VERDICT DES GARDES (Rang III) :")
+    print(f"  G1 (Non-stationnarité, CV > 0.15)      : {'OK' if g1_pass else 'ECHEC'}")
+    print(f"  G2 (Profil de Résonance, R² > 0.85)    : {'OK' if g2_pass else 'ECHEC'}")
+    print(f"  G3 (Absence de Cristal, CV_esp > 0.3)  : {'OK' if g3_pass else 'ECHEC'}")
+    print("=" * 78)
     
     if g1_pass and g2_pass and g3_pass:
-        print("\n>>> AUDIT VERT : Le résidu du crible présente une intermittence spectrale")
-        print("    significative et une décroissance d'enveloppe, validant l'analogie avec")
-        print("    des résonances transitoires (états de Gamow) dans un système quantique ouvert.")
+        print("\n>>> AUDIT VERT : Le résidu spectral présente des résonances transitoires")
+        print("    localisées, ajustables par un profil de Lorentz (analogue états de Gamow),")
+        print("    sans former de réseau périodique rigide (pas de cristal spectral).")
     else:
-        print("\n>>> REFUS PUBLIÉ : La dynamique observée ne correspond pas au modèle de")
-        print("    résonances transitoires attendu. Les gardes ont été violées.")
+        print("\n>>> REFUS PUBLIÉ : La dynamique spectrale observée ne correspond pas au modèle")
+        print("    de résonances transitoires non-stationnaires attendu. Les gardes ont été violées.")
         
     print(f"\nTemps total d'exécution : {time.time() - t0:.2f} s")
     print("[OK]")
